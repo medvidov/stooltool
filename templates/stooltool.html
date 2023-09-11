@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<link rel="stylesheet" href="https://fonts.xz.style/serve/inter.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@exampledev/new.css@1.1.2/new.min.css">
+<head>
+    <title>
+        StoolTool
+    </title>
+    <style type="text/css">
+h1 {
+    font-family:Lato,sans-serif;
+    /*color:;*/
+    font-size:62px;
+}
+
+h3 {font-family:Lato,sans-serif;
+    /*color:;*/
+   font-size:32px;
+}
+
+p {
+    font-family:Lato,sans-serif;
+   font-size:20px;
+}
+
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>StoolTool</h1>
+        <h3>ePRO for Pediatric GI Monitoring</h3>
+    </header>
+    <p>
+        Select an image and add your personal evaluation of the stool consistency.
+    </p>
+    <p>
+    <form action="/get_rating_web" method="POST" enctype="multipart/form-data">
+        <div class="form-group">
+          <br>
+          <label>Select image</label>
+          <div class="custom-file">
+            <input type="file" class="custom-file-input" name="image" id="image">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Upload</button>
+        <br>
+        <br>
+        Predicted rating:
+        <br>
+        <div>
+            <input type="radio" name="options" id="1" value="1">
+            <label for="1">1   </label>
+            <input type="radio" name="options" id="2" value="2">
+            <label for="2">2   </label>
+            <input type="radio" name="options" id="3" value="3">
+            <label for="3">3   </label>
+            <input type="radio" name="options" id="4" value="4">
+            <label for="4">4   </label>
+            <input type="radio"name="options"  id="5" value="5">
+            <label for="5">5   </label>
+            <input type="radio" name="options" id="6" value="6">
+            <label for="6">6   </label>
+            <input type="radio" name="options" id="7" value="7">
+            <label for="7">7   </label>
+            <input type="radio" name="options" id="weird" value="weird">
+            <label for="weird">weird</label><br>
+        </div>
+    </form>
+    <br>
+    </p>
+    <p>
+    Models:
+    <br>
+    {% for model in models %}
+        <div>{{ model }}</div>
+    {%endfor%}
+</p>
+</body>
+
+</html>

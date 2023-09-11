@@ -1,0 +1,115 @@
+ARG PYTHON_IMAGE="python:3.8.6-slim"
+FROM ${PYTHON_IMAGE}
+
+USER root
+RUN apt-get update -y \
+    && apt-get install -y \
+    gcc \
+    g++ 
+RUN useradd -m pyuser
+
+# Build the python virtual environment
+USER pyuser:pyuser
+WORKDIR /home/pyuser
+RUN python3 -m venv myvenv \
+    && . ./myvenv/bin/activate \
+    && pip install 'wheel==0.35.1' 'gunicorn==20.0.4'
+
+# Add tensorflow
+RUN . ./myvenv/bin/activate \
+&& pip install tensorflow
+
+COPY --chown=pyuser:pyuser setup.py requirements.txt ./
+ARG PIP_EXTRA_INDEX_URL
+RUN : "${PIP_EXTRA_INDEX_URL:?PIP_EXTRA_INDEX_URL build argument must be set.}" \
+    && . ./myvenv/bin/activate \
+    && pip install .
+
+# Remove copies of apt packages installed to allow wheel to work.
+USER root
+RUN apt-get remove -y \
+    gcc \
+    g++ \
+    && apt-get auto-remove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+USER pyuser:pyuser
+
+# Now copy the rest of the source code
+COPY --chown=pyuser:pyuser ./  ./
+
+ARG GUNICORN_CONF_FILE="gunicorn.conf.py"
+RUN echo "import multiprocessing" >> ${GUNICORN_CONF_FILE} \
+ && echo "import logging" >> ${GUNICORN_CONF_FILE} \
+ && echo "import os" >> ${GUNICORN_CONF_FILE} \
+ && echo "import re" >> ${GUNICORN_CONF_FILE} \
+ && echo "from gunicorn import glogging" >> ${GUNICORN_CONF_FILE} \
+ \
+ && echo "filter_pattern=os.getenv(\"GUNICORN_ACCESS_LOG_SUPPRESS_REGEX\", \"\$^\")" >> ${GUNICORN_CONF_FILE} \
+ && echo "filter_pattern_re=re.compile(filter_pattern)" >> ${GUNICORN_CONF_FILE} \
+ \
+ && echo "def filter_access_regex(log_record):" >> ${GUNICORN_CONF_FILE} \
+ && echo "  return not filter_pattern_re.match(log_record.getMessage())" >> ${GUNICORN_CONF_FILE} \
+ \
+ && echo "class PlatformGunicornLogger(glogging.Logger):" >> ${GUNICORN_CONF_FILE} \
+ \
+ && echo "  def setup(self, cfg):" >> ${GUNICORN_CONF_FILE} \
+ && echo "    super().setup(cfg)" >> ${GUNICORN_CONF_FILE} \
+ && echo "    logger = logging.getLogger(\"gunicorn.access\")" >> ${GUNICORN_CONF_FILE} \
+ && echo "    logger.addFilter(filter_access_regex)" >> ${GUNICORN_CONF_FILE} \
+ \
+ && echo "logger_class = PlatformGunicornLogger" >> ${GUNICORN_CONF_FILE} \
+ \
+ && echo "def get_num_workers():" >> ${GUNICORN_CONF_FILE} \
+ && echo "  workers_per_cpu = int(os.getenv('GUNICORN_WORKERS_PER_CPU', 2))" >> ${GUNICORN_CONF_FILE} \
+ && echo "  workers_fixed = int(os.getenv('GUNICORN_WORKERS_FIXED', 1))" >> ${GUNICORN_CONF_FILE} \
+ && echo "  return max(1, multiprocessing.cpu_count() * workers_per_cpu + workers_fixed)" >> ${GUNICORN_CONF_FILE} \
+ \
+ && echo "workers = get_num_workers()" >> ${GUNICORN_CONF_FILE} 
+ 
+# Create a CMD script with commands to launch the app with gunicorn
+ARG CMD_FILE_NAME="prod.sh"
+ARG PYTHON_APP_MODULE="app:app"
+ARG LISTEN_ADDRESS="0.0.0.0"
+ARG LISTEN_PORT="5000"
+RUN : "${CMD_FILE_NAME:?CMD_FILE_NAME build argument must be set.}" \
+&& : "${PYTHON_APP_MODULE:?PYTHON_APP_MODULE build argument must be set.}" \
+&& : "${LISTEN_ADDRESS:?LISTEN_ADDRESS build argument must be set.}" \
+&& : "${LISTEN_PORT:?LISTEN_PORT build argument must be set.}" \
+&& echo '#''!/bin/bash' > ${CMD_FILE_NAME} \
+&& echo ". ./myvenv/bin/activate" >> ${CMD_FILE_NAME} \
+&& echo "exec gunicorn --bind ${LISTEN_ADDRESS}:${LISTEN_PORT} -c file:${GUNICORN_CONF_FILE} --capture-output --disable-redirect-access-to-syslog --access-logfile - --error-logfile - --reload ${PYTHON_APP_MODULE}" >> ${CMD_FILE_NAME} \
+&& chmod a=r,u=rwx ${CMD_FILE_NAME}
+
+EXPOSE ${LISTEN_PORT}
+
+ENV PYTHON_LOGLEVEL=INFO
+
+ENV PLATFORM_LOGGING_LEVEL=INFO
+ENV PLATFORM_LOGGING_UDP_HOST=
+ENV PLATFORM_LOGGING_UDP_PORT=
+
+ENV PLATFORM_TELEMETRY_FIELDS_APM=
+ENV PLATFORM_TELEMETRY_FIELDS_GCP=
+ENV PLATFORM_TELEMETRY_TRACE_HOST=
+ENV PLATFORM_TELEMETRY_TRACE_PORT=
+ENV PLATFORM_TELEMETRY_METRICS_HOST=
+ENV PLATFORM_TELEMETRY_METRICS_PORT=
+ENV PLATFORM_TELEMETRY_METRICS_INTERVAL_SECONDS=
+ENV PLATFORM_TELEMETRY_CONSOLE=
+
+ENV PLATFORM_SERVICE_NAME=liverfast-local
+ENV PLATFORM_SERVICE_RELEASE=0.0.1
+ENV PLATFORM_SERVICE_ENVIRONMENT=localhost
+
+ENV GUNICORN_WORKERS_PER_CPU=2
+ENV GUNICORN_WORKERS_FIXED=1
+ENV GUNICORN_ACCESS_LOG_SUPPRESS_REGEX=$^
+ENV GRPC_POLL_STRATEGY=epoll1,poll
+
+ENV CMD_FILE_NAME=${CMD_FILE_NAME}
+
+ENTRYPOINT ["/bin/bash", "-c"]
+CMD ["/home/pyuser/${CMD_FILE_NAME}"]
+

@@ -1,0 +1,22 @@
+setup_params: {
+  training_data_dir: 'TrainingDataV2',
+  seed: 2018,
+  train_fraction: 0.8,
+  use_validation_dir: True,
+  validation_data_dir: 'validation',
+  downsample_train_data: False
+}
+training_params: {
+  image_dimensions: [224, 224],
+  batch_size: 16,
+  batches_per_epoch: 100,
+  num_epochs: 100,
+  learning_rate: 0.001,
+  model: 'resnet50',
+  use_image_segmentation: True,
+  image_segmentaiton: {
+    truth_pickle: 'segnet_truth_one.pkl',
+    results_dir: 'segnet'
+  }
+}
+results_dir: '../results/test2'
